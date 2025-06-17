@@ -4,8 +4,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 from base.enums import GroupOrderStatusEnum
-from base.models import GroupOrder
+from base.models import GroupOrder, User
 from base.orders_serializers import OrderListSerializer, OrderDetailSerializer
+from base.utils import get_user_from_user_auth
 
 
 class OrderListView(generics.ListAPIView):
@@ -17,7 +18,7 @@ class OrderListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
+        user = get_user_from_user_auth(self.request)
         queryset = GroupOrder.objects.filter(
             Q(created_by=user) | Q(participants__user=user)
         ).distinct()
@@ -62,7 +63,7 @@ class OrderDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
+        user = get_user_from_user_auth(self.request)
         return GroupOrder.objects.filter(
             Q(created_by=user) | Q(participants__user=user)
         ).distinct()
