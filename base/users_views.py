@@ -7,14 +7,14 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth.models import User as AuthUser
 from django.contrib.auth import authenticate
 
-from .users_serializers import (
+from base.users_serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
     UserSerializer,
     ChangePasswordSerializer,
     UpdateProfileSerializer,
 )
-from .models import User
+from base.models import User
 
 
 class RegisterView(generics.CreateAPIView):
