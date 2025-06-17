@@ -20,6 +20,60 @@ class OrderItemCreateSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1)
 
 
+class JoinOrderSerializer(serializers.Serializer):
+    """
+    Serializer for joining an existing order using order code
+    """
+
+    code = serializers.CharField(max_length=6)
+
+    def validate_code(self, value):
+        """Validate that the order code exists and is joinable"""
+        try:
+            order = GroupOrder.objects.get(code=value)
+        except GroupOrder.DoesNotExist:
+            raise serializers.ValidationError("Invalid order code")
+
+        if order.status != GroupOrderStatusEnum.OPEN.value:
+            raise serializers.ValidationError(
+                "This order is no longer accepting new participants"
+            )
+
+        return value
+
+    def validate(self, attrs):
+        """Additional validation to check if user is already a participant"""
+        code = attrs["code"]
+        user = get_user_from_user_auth(self.context["request"])
+        order = GroupOrder.objects.get(code=code)
+
+        # Check if user is already a participant
+        if GroupOrderParticipant.objects.filter(group_order=order, user=user).exists():
+            raise serializers.ValidationError(
+                "You are already a participant in this order"
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        """Add user as participant to the order"""
+        code = validated_data["code"]
+        user = get_user_from_user_auth(self.context["request"])
+        order = GroupOrder.objects.get(code=code)
+
+        # Create participant entry with zero initial amount
+        participant = GroupOrderParticipant.objects.create(
+            group_order=order,
+            user=user,
+            amount=0.0,
+            delivery_fees=0.0,
+            vat=0.0,
+            discount=0.0,
+        )
+
+        return {"order": order, "participant": participant}
+
+
 class AddItemsToOrderSerializer(serializers.Serializer):
     """
     Serializer for adding items to an existing order

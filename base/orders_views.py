@@ -12,6 +12,7 @@ from base.orders_serializers import (
     OrderDetailSerializer,
     CreateOrderSerializer,
     AddItemsToOrderSerializer,
+    JoinOrderSerializer,
 )
 from base.utils import get_user_from_user_auth
 
@@ -40,6 +41,46 @@ class CreateOrderView(generics.CreateAPIView):
                     "success": True,
                     "message": "Order created successfully",
                     "data": detail_serializer.data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class JoinOrderView(generics.CreateAPIView):
+    """
+    Join an existing group order using order code
+    """
+
+    serializer_class = JoinOrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(
+                data=request.data, context={"request": request}
+            )
+            serializer.is_valid(raise_exception=True)
+
+            # Join the order
+            result = serializer.save()
+
+            # Return order details
+            detail_serializer = OrderDetailSerializer(result["order"])
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Successfully joined the group order",
+                    "data": {
+                        "order": detail_serializer.data,
+                        "participant_id": result["participant"].id,
+                    },
                 },
                 status=status.HTTP_201_CREATED,
             )
