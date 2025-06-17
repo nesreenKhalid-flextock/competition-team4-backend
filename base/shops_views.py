@@ -53,11 +53,13 @@ class ShopDetailView(generics.RetrieveAPIView):
 
     def retrieve(self, request, *args, **kwargs):
         try:
-            instance = self.get_object()
-            serializer = self.get_serializer(instance)
+            # Explicitly handle the pk lookup to check if shop exists
+            pk = kwargs.get("pk")
+            shop = get_object_or_404(Shop, pk=pk)
+            serializer = self.get_serializer(shop)
             return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
         except Shop.DoesNotExist:
-            return Response({"success": False, "error": "Shop not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"success": False, "error": f"Shop with ID {kwargs.get('pk')} not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
