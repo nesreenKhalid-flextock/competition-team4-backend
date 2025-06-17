@@ -28,7 +28,10 @@ urlpatterns = [
         "auth/change-password/",
         users_views.ChangePasswordView.as_view(),
         name="change_password",
-    ),  # Shop endpoints
+    ),
+    # Payment methods endpoint
+    path("auth/payment-methods/", users_views.get_payment_methods, name="payment_methods"),
+    # Shop endpoints
     path("shops/", shops_views.ShopListView.as_view(), name="shop_list"),
     path("shops/categories/", shops_views.shop_categories, name="shop_categories"),
     path("shops/<int:pk>/", shops_views.ShopDetailView.as_view(), name="shop_detail"),

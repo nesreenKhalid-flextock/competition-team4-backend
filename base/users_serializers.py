@@ -8,8 +8,12 @@ from base.models import User
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
+    full_name = serializers.CharField(max_length=150, required=True)
     phone_number = serializers.CharField(required=False, allow_blank=True)
     instapay_address = serializers.CharField(required=False, allow_blank=True)
+    accepted_payment_types = serializers.ListField(
+        child=serializers.CharField(max_length=50), required=False, allow_empty=True, help_text="List of accepted payment methods"
+    )
 
     class Meta:
         model = AuthUser
@@ -18,10 +22,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             "email",
             "password",
             "password_confirm",
-            "first_name",
-            "last_name",
+            "full_name",
             "phone_number",
             "instapay_address",
+            "accepted_payment_types",
         ]
 
     def validate(self, attrs):
@@ -32,8 +36,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Remove password_confirm and custom fields from validated_data for AuthUser
         password_confirm = validated_data.pop("password_confirm")
+        full_name = validated_data.pop("full_name", "")
         phone_number = validated_data.pop("phone_number", "")
         instapay_address = validated_data.pop("instapay_address", "")
+        accepted_payment_types = validated_data.pop("accepted_payment_types", [])
 
         # Create AuthUser
         auth_user = AuthUser.objects.create_user(
@@ -48,8 +54,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user = User.objects.create(
             auth_user=auth_user,
             username=validated_data["username"],
+            full_name=full_name,
             phone_number=phone_number,
             instapay_address=instapay_address,
+            accepted_payment_types=accepted_payment_types,
         )
 
         return auth_user
@@ -72,9 +80,7 @@ class UserLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError("User account is disabled")
             attrs["user"] = user
         else:
-            raise serializers.ValidationError(
-                "Must include username/email and password"
-            )
+            raise serializers.ValidationError("Must include username/email and password")
 
         return attrs
 
@@ -84,6 +90,9 @@ class UserSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source="auth_user.email", read_only=True)
     first_name = serializers.CharField(source="auth_user.first_name", read_only=True)
     last_name = serializers.CharField(source="auth_user.last_name", read_only=True)
+    accepted_payment_types = serializers.ListField(
+        child=serializers.CharField(max_length=50), read_only=True, help_text="List of accepted payment methods"
+    )
 
     class Meta:
         model = User
@@ -93,9 +102,11 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "first_name",
             "last_name",
+            "full_name",
             "phone_number",
             "instapay_address",
             "profile_picture",
+            "accepted_payment_types",
         ]
 
 
@@ -120,6 +131,9 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source="auth_user.first_name")
     last_name = serializers.CharField(source="auth_user.last_name")
     email = serializers.CharField(source="auth_user.email")
+    accepted_payment_types = serializers.ListField(
+        child=serializers.CharField(max_length=50), required=False, allow_empty=True, help_text="List of accepted payment methods"
+    )
 
     class Meta:
         model = User
@@ -127,9 +141,11 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "email",
+            "full_name",
             "phone_number",
             "instapay_address",
             "profile_picture",
+            "accepted_payment_types",
         ]
 
     def update(self, instance, validated_data):
