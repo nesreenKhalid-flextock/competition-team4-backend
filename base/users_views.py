@@ -15,6 +15,7 @@ from base.users_serializers import (
     UpdateProfileSerializer,
 )
 from base.models import User
+from django.db import transaction
 
 
 class RegisterView(generics.CreateAPIView):
@@ -22,6 +23,7 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
     permission_classes = [AllowAny]
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

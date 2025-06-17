@@ -1,3 +1,4 @@
+import re
 from rest_framework import serializers
 from django.contrib.auth.models import User as AuthUser
 from django.contrib.auth import authenticate
@@ -8,18 +9,16 @@ from base.models import User
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
-    phone_number = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=True, allow_blank=True)
     instapay_address = serializers.CharField(required=False, allow_blank=True)
+    fullname = serializers.CharField(required=True, allow_blank=True)
 
     class Meta:
         model = AuthUser
         fields = [
-            "username",
-            "email",
             "password",
             "password_confirm",
-            "first_name",
-            "last_name",
+            "fullname",
             "phone_number",
             "instapay_address",
         ]
@@ -27,6 +26,18 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError("Passwords don't match")
+
+        validated_phone_number = self.validate_phone_number(
+            attrs.get("phone_number", "")
+        )
+
+        if AuthUser.objects.filter(username=validated_phone_number).exists():
+            raise serializers.ValidationError(
+                "A user with this phone number already exists."
+            )
+
+        attrs["phone_number"] = validated_phone_number
+
         return attrs
 
     def create(self, validated_data):
@@ -35,24 +46,63 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         phone_number = validated_data.pop("phone_number", "")
         instapay_address = validated_data.pop("instapay_address", "")
 
+        fullname_split = validated_data.pop("fullname", "").strip().split(maxsplit=1)
+        first_name = fullname_split[0] if fullname_split else ""
+        last_name = fullname_split[1] if len(fullname_split) > 1 else ""
+
         # Create AuthUser
         auth_user = AuthUser.objects.create_user(
-            username=validated_data["username"],
-            email=validated_data["email"],
-            password=validated_data["password"],
-            first_name=validated_data.get("first_name", ""),
-            last_name=validated_data.get("last_name", ""),
+            username=phone_number,
+            password=password_confirm,
+            first_name=first_name,
+            last_name=last_name,
         )
 
         # Create custom User
-        user = User.objects.create(
+        User.objects.create(
             auth_user=auth_user,
-            username=validated_data["username"],
             phone_number=phone_number,
             instapay_address=instapay_address,
         )
 
         return auth_user
+
+    def validate_phone_number(self, value):
+        """
+        Validate that the phone number is a valid Egyptian phone number
+        Egyptian phone numbers format:
+        - Mobile: +20 10/11/12/15 XXXXXXXX (11 digits after country code)
+        - Landline: +20 X XXXXXXXX (9-10 digits after country code)
+        """
+        if not value:
+            raise serializers.ValidationError("Phone number is required.")
+
+        # Remove any spaces, dashes, or parentheses
+        cleaned_phone = re.sub(r"[\s\-\(\)]", "", value)
+
+        # Egyptian phone number patterns
+        patterns = [
+            r"^(\+20|0020|20|0)?(10|11|12|15)\d{8,9}$",  # Mobile numbers
+        ]
+
+        # Check if the phone number matches any of the patterns
+        is_valid = any(re.match(pattern, cleaned_phone) for pattern in patterns)
+
+        if not is_valid:
+            raise serializers.ValidationError(
+                "Please enter a valid Egyptian phone number. "
+                "Mobile format: +20 1X XXXXXXXX"
+            )
+
+        # Normalize the phone number to international format
+        if cleaned_phone.startswith("00"):
+            cleaned_phone = "+" + cleaned_phone[2:]
+        elif cleaned_phone.startswith("20"):
+            cleaned_phone = "+" + cleaned_phone
+        elif not cleaned_phone.startswith("+"):
+            cleaned_phone = "+20" + cleaned_phone
+
+        return cleaned_phone
 
 
 class UserLoginSerializer(serializers.Serializer):
