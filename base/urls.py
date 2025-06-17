@@ -85,5 +85,10 @@ urlpatterns = [
         orders_views.UpdateItemQuantityView.as_view(),
         name="update_item_quantity",
     ),
+    path(
+        "orders/<int:pk>/lock/",
+        orders_views.LockOrderView.as_view(),
+        name="lock_order",
+    ),
     path("orders/statuses/", orders_views.order_statuses, name="order_statuses"),
 ]

@@ -503,6 +503,70 @@ class GroupOrderSummaryView(generics.RetrieveAPIView):
             )
 
 
+class LockOrderView(generics.UpdateAPIView):
+    """
+    Lock a group order - only the creator can lock the order
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        order_id = self.kwargs.get("pk")
+        user = get_user_from_user_auth(self.request)
+        return get_object_or_404(GroupOrder, pk=order_id, created_by=user)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            order = self.get_object()
+
+            # Check if order is already locked or closed
+            if order.status == GroupOrderStatusEnum.LOCKED.value:
+                return Response(
+                    {
+                        "success": False,
+                        "error": f"Order is already {order.status.lower()}",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Check if order has any items
+            if not order.items.exists():
+                return Response(
+                    {"success": False, "error": "Cannot lock an empty order"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Lock the order by changing status
+            order.status = GroupOrderStatusEnum.LOCKED.value
+            order.save()
+
+            # Return updated order details
+            detail_serializer = OrderDetailsSerializer(order)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Order has been locked successfully",
+                    "data": detail_serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except GroupOrder.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "Order not found or you don't have permission to lock it",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def order_statuses(request):
