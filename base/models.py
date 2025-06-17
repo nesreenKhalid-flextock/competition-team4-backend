@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User as AuthUser
 
-from base.enums import GroupOrderStatusEnum
+from base.enums import GroupOrderStatusEnum, ShopCategoryEnum
 
 
 class User(models.Model):
@@ -25,6 +25,11 @@ class Shop(models.Model):
     address = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     menu_image = models.ImageField(upload_to="shop_menus/", blank=True, null=True)
+    category = models.CharField(
+        max_length=50,
+        choices=ShopCategoryEnum.choices,
+        default=ShopCategoryEnum.RESTAURANT.value,
+    )
 
     def __str__(self):
         return self.name

@@ -11,3 +11,14 @@ class GroupOrderStatusEnum(Enum):
     @classmethod
     def choices(cls):
         return [(tag.name, tag.value) for tag in cls]
+
+
+class ShopCategoryEnum(Enum):
+    RESTAURANT = "restaurant"
+    CAFE = "cafe"
+    BAKERY = "bakery"
+    SUPERMARKET = "supermarket"
+
+    @classmethod
+    def choices(cls):
+        return [(tag.name, tag.value) for tag in cls]

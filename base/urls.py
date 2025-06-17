@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView,
 )
-from base import users_views
+from base import users_views, shops_views
 
 urlpatterns = [
     # Health check
@@ -28,5 +28,11 @@ urlpatterns = [
         "auth/change-password/",
         users_views.ChangePasswordView.as_view(),
         name="change_password",
-    ),
+    ),  # Shop endpoints
+    path("shops/", shops_views.ShopListView.as_view(), name="shop_list"),
+    path("shops/categories/", shops_views.shop_categories, name="shop_categories"),
+    path("shops/<int:pk>/", shops_views.ShopDetailView.as_view(), name="shop_detail"),
+    # Product endpoints
+    path("shops/<int:shop_id>/products/", shops_views.ProductListView.as_view(), name="product_list"),
+    path("products/<int:pk>/", shops_views.ProductDetailView.as_view(), name="product_detail"),
 ]
