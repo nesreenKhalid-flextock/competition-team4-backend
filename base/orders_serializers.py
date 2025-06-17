@@ -182,19 +182,6 @@ class CreateOrderSerializer(serializers.Serializer):
             raise serializers.ValidationError("Shop not found")
         return value
 
-    def validate_items(self, value):
-        """Validate that all products exist and belong to the same shop"""
-        if not value:
-            raise serializers.ValidationError("At least one item is required")
-
-        product_ids = [item["product_id"] for item in value]
-        products = Product.objects.filter(id__in=product_ids)
-
-        if len(products) != len(product_ids):
-            raise serializers.ValidationError("One or more products not found")
-
-        return value
-
     def create(self, validated_data):
         """Create a new group order with items"""
 
