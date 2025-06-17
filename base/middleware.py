@@ -19,7 +19,6 @@ class ErrorResponseLoggingMiddleware(MiddlewareMixin):
 
         # Only log if status code is 400 or higher (client/server errors)
         if response.status_code >= 400:
-            print(request.data)
             try:
                 # Get request information
                 request_method = request.method
@@ -45,16 +44,12 @@ class ErrorResponseLoggingMiddleware(MiddlewareMixin):
                             response_content = response_body
 
                     except UnicodeDecodeError:
-                        response_content = (
-                            f"<Binary content, length: {len(response.content)} bytes>"
-                        )
+                        response_content = f"<Binary content, length: {len(response.content)} bytes>"
 
                 # Get user information if available
                 user_info = "Anonymous"
                 if hasattr(request, "user") and request.user.is_authenticated:
-                    user_info = (
-                        f"User ID: {request.user.id}, Username: {request.user.username}"
-                    )
+                    user_info = f"User ID: {request.user.id}, Username: {request.user.username}"
 
                 # Create log entry
                 log_data = {
@@ -84,4 +79,5 @@ class ErrorResponseLoggingMiddleware(MiddlewareMixin):
                 # Don't let middleware errors break the response
                 logger.error(f"Error in ErrorResponseLoggingMiddleware: {str(e)}")
 
+        return response
         return response
