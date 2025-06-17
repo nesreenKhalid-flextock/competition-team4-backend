@@ -74,6 +74,11 @@ class ProductListView(generics.ListCreateAPIView):
         shop_id = self.kwargs.get("shop_id")
         queryset = Product.objects.filter(shop_id=shop_id)
 
+        # Filter by category if provided
+        category = self.request.query_params.get("category", None)
+        if category:
+            queryset = queryset.filter(category__icontains=category)
+
         # Search products by name
         search = self.request.query_params.get("search", None)
         if search:
@@ -160,6 +165,22 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Response({"success": False, "error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def product_categories(request):
+    """
+    Get all distinct product categories currently in use
+    """
+    try:
+        # Get distinct categories that are not null or empty
+        categories = Product.objects.filter(category__isnull=False).exclude(category__exact="").values_list("category", flat=True).distinct()
+
+        categories_list = [cat for cat in categories if cat]
+        return Response({"success": True, "data": categories_list}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
