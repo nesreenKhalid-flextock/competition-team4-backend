@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView,
 )
-from base import users_views, shops_views
+from base import users_views, shops_views, orders_views
 
 urlpatterns = [
     # Health check
@@ -37,6 +37,18 @@ urlpatterns = [
     path("shops/<int:pk>/", shops_views.ShopDetailView.as_view(), name="shop_detail"),
     # Product endpoints
     path("products/categories/", shops_views.product_categories, name="product_categories"),
-    path("shops/<int:shop_id>/products/", shops_views.ProductListView.as_view(), name="product_list"),
-    path("products/<int:pk>/", shops_views.ProductDetailView.as_view(), name="product_detail"),
+    path(
+        "shops/<int:shop_id>/products/",
+        shops_views.ProductListView.as_view(),
+        name="product_list",
+    ),
+    path(
+        "products/<int:pk>/",
+        shops_views.ProductDetailView.as_view(),
+        name="product_detail",
+    ),
+    # Order endpoints
+    path("orders/", orders_views.OrderListView.as_view(), name="order_list"),
+    path("orders/<int:pk>/", orders_views.OrderDetailView.as_view(), name="order_detail"),
+    path("orders/statuses/", orders_views.order_statuses, name="order_statuses"),
 ]
