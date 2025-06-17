@@ -8,3 +8,6 @@ python-decouple
 dj-database-url
 black
 Pillow
+gunicorn
+whitenoise
+google-cloud-storage
