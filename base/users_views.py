@@ -60,15 +60,15 @@ class LoginView(generics.GenericAPIView):
 
         user = serializer.validated_data["user"]
         refresh = RefreshToken.for_user(user)
-        access_token = refresh.access_token
-
-        # Get user profile data
+        access_token = refresh.access_token  # Get user profile data
         try:
             user_profile = User.objects.get(auth_user=user)
             user_data = UserSerializer(user_profile).data
         except User.DoesNotExist:
             # Create profile if it doesn't exist
-            user_profile = User.objects.create(auth_user=user, username=user.username)
+            user_profile = User.objects.create(
+                auth_user=user, username=user.username, full_name=f"{user.first_name} {user.last_name}".strip() or user.username
+            )
             user_data = UserSerializer(user_profile).data
 
         return Response(
@@ -94,7 +94,9 @@ class ProfileView(generics.RetrieveAPIView):
         except User.DoesNotExist:
             # Create profile if it doesn't exist
             return User.objects.create(
-                auth_user=self.request.user, username=self.request.user.username
+                auth_user=self.request.user,
+                username=self.request.user.username,
+                full_name=f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username,
             )
 
 
@@ -108,7 +110,9 @@ class UpdateProfileView(generics.UpdateAPIView):
         except User.DoesNotExist:
             # Create profile if it doesn't exist
             return User.objects.create(
-                auth_user=self.request.user, username=self.request.user.username
+                auth_user=self.request.user,
+                username=self.request.user.username,
+                full_name=f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username,
             )
 
 
@@ -127,9 +131,7 @@ class ChangePasswordView(generics.UpdateAPIView):
         user.set_password(serializer.validated_data["new_password"])
         user.save()
 
-        return Response(
-            {"message": "Password changed successfully"}, status=status.HTTP_200_OK
-        )
+        return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
 
 
 @api_view(["POST"])
@@ -142,6 +144,21 @@ def logout_view(request):
         return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_payment_methods(request):
+    """
+    Get all available payment methods
+    """
+    try:
+        from base.enums import UserAcceptedPaymentMethodsEnum
+
+        payment_methods = [{"value": choice[0], "label": choice[1]} for choice in UserAcceptedPaymentMethodsEnum.choices]
+        return Response({"success": True, "data": payment_methods}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
