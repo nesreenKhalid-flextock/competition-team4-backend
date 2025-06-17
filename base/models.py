@@ -92,6 +92,7 @@ class Product(models.Model):
     price = models.FloatField()
     description = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to="product_images/", blank=True, null=True)
+    category = models.CharField(max_length=50, blank=True, null=True)
 
     class Meta:
         unique_together = ("shop", "name")
