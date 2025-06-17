@@ -6,13 +6,14 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
 from base.enums import GroupOrderStatusEnum
-from base.models import GroupOrder
+from base.models import GroupOrder, GroupOrderParticipant, GroupOrderItem
 from base.orders_serializers import (
     OrderListSerializer,
-    OrderDetailSerializer,
+    OrderDetailsSerializer,
     CreateOrderSerializer,
     AddItemsToOrderSerializer,
     JoinOrderSerializer,
+    GroupOrderSummarySerializer,
 )
 from base.utils import get_user_from_user_auth
 
@@ -34,7 +35,7 @@ class CreateOrderView(generics.CreateAPIView):
             group_order = serializer.save()
 
             # Return the created order details
-            detail_serializer = OrderDetailSerializer(group_order)
+            detail_serializer = OrderDetailsSerializer(group_order)
 
             return Response(
                 {
@@ -71,7 +72,7 @@ class JoinOrderView(generics.CreateAPIView):
             result = serializer.save()
 
             # Return order details
-            detail_serializer = OrderDetailSerializer(result["order"])
+            detail_serializer = OrderDetailsSerializer(result["order"])
 
             return Response(
                 {
@@ -119,7 +120,7 @@ class AddItemsToOrderView(generics.CreateAPIView):
             result = serializer.save()
 
             # Return updated order details
-            detail_serializer = OrderDetailSerializer(result["order"])
+            detail_serializer = OrderDetailsSerializer(result["order"])
 
             return Response(
                 {
@@ -138,6 +139,202 @@ class AddItemsToOrderView(generics.CreateAPIView):
             return Response(
                 {"success": False, "error": "Order not found"},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class RemoveItemsFromOrderView(generics.CreateAPIView):
+    """
+    Remove items from an existing group order
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_order(self):
+        """Get the order and check if user can remove items from it"""
+        order_id = self.kwargs.get("pk")
+        order = get_object_or_404(GroupOrder, pk=order_id)
+        return order
+
+    def create(self, request, *args, **kwargs):
+        try:
+            order = self.get_order()
+            user = get_user_from_user_auth(request)
+
+            # Check if order is still open
+            if order.status != GroupOrderStatusEnum.OPEN.value:
+                return Response(
+                    {"success": False, "error": "Cannot modify closed orders"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            item_ids = request.data.get("item_ids", [])
+            if not item_ids:
+                return Response(
+                    {"success": False, "error": "No item IDs provided"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Get items to remove (only user's own items)
+            items_to_remove = GroupOrderItem.objects.filter(
+                id__in=item_ids, group_order=order, user=user
+            )
+
+            if not items_to_remove.exists():
+                return Response(
+                    {"success": False, "error": "No valid items found to remove"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Calculate amount to subtract
+            removed_amount = sum(item.price * item.quantity for item in items_to_remove)
+            removed_count = items_to_remove.count()
+
+            # Remove items
+            items_to_remove.delete()
+
+            # Update participant amount and order total
+            participant = GroupOrderParticipant.objects.get(
+                group_order=order, user=user
+            )
+            participant.amount -= removed_amount
+            participant.save()
+
+            order.total_price -= removed_amount
+            order.save()
+
+            # Return updated order details
+            detail_serializer = OrderDetailsSerializer(order)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Removed {removed_count} items from order",
+                    "data": {
+                        "order": detail_serializer.data,
+                        "items_removed": removed_count,
+                        "amount_reduced": removed_amount,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except GroupOrder.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Order not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except GroupOrderParticipant.DoesNotExist:
+            return Response(
+                {"success": False, "error": "You are not a participant in this order"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class UpdateItemQuantityView(generics.UpdateAPIView):
+    """
+    Update quantity of a specific item in a group order
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        item_id = self.kwargs.get("item_id")
+        user = get_user_from_user_auth(self.request)
+        return get_object_or_404(GroupOrderItem, id=item_id, user=user)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            item = self.get_object()
+            order = item.group_order
+            user = get_user_from_user_auth(request)
+
+            # Check if order is still open
+            if order.status != GroupOrderStatusEnum.OPEN.value:
+                return Response(
+                    {"success": False, "error": "Cannot modify closed orders"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            new_quantity = request.data.get("quantity")
+            if new_quantity is None:
+                return Response(
+                    {"success": False, "error": "Quantity is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                new_quantity = int(new_quantity)
+                if new_quantity <= 0:
+                    raise ValueError("Quantity must be positive")
+            except (ValueError, TypeError):
+                return Response(
+                    {"success": False, "error": "Quantity must be a positive integer"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Calculate price difference
+            old_total = item.price * item.quantity
+            new_total = item.price * new_quantity
+            price_difference = new_total - old_total
+
+            # Update item quantity
+            item.quantity = new_quantity
+            item.save()
+
+            # Update participant amount and order total
+            participant = GroupOrderParticipant.objects.get(
+                group_order=order, user=user
+            )
+            participant.amount += price_difference
+            participant.save()
+
+            order.total_price += price_difference
+            order.save()
+
+            # Return updated order details
+            detail_serializer = OrderDetailsSerializer(order)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Updated item quantity to {new_quantity}",
+                    "data": {
+                        "order": detail_serializer.data,
+                        "updated_item": {
+                            "id": item.id,
+                            "product_name": item.product.name,
+                            "new_quantity": item.quantity,
+                            "price_per_item": item.price,
+                            "total_price": item.price * item.quantity,
+                        },
+                        "price_difference": price_difference,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except GroupOrderItem.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "Item not found or you don't own this item",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except GroupOrderParticipant.DoesNotExist:
+            return Response(
+                {"success": False, "error": "You are not a participant in this order"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as e:
             return Response(
@@ -241,7 +438,7 @@ class OrderDetailView(generics.RetrieveAPIView):
     Retrieve detailed information about a specific order
     """
 
-    serializer_class = OrderDetailSerializer
+    serializer_class = OrderDetailsSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -260,6 +457,43 @@ class OrderDetailView(generics.RetrieveAPIView):
         except GroupOrder.DoesNotExist:
             return Response(
                 {"success": False, "error": "Order not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class GroupOrderSummaryView(generics.RetrieveAPIView):
+    """
+    Get detailed summary of a group order with items grouped by user
+    """
+
+    serializer_class = GroupOrderSummarySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = get_user_from_user_auth(self.request)
+        # Only allow users who created or participated in the order
+        return GroupOrder.objects.filter(
+            Q(created_by=user) | Q(participants__user=user)
+        ).distinct()
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, context={"request": request})
+            return Response(
+                {"success": True, "data": serializer.data}, status=status.HTTP_200_OK
+            )
+        except GroupOrder.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "Order not found or you don't have permission to view it",
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:

@@ -66,9 +66,24 @@ urlpatterns = [
         "orders/<int:pk>/", orders_views.OrderDetailView.as_view(), name="order_detail"
     ),
     path(
+        "orders/<int:pk>/summary/",
+        orders_views.GroupOrderSummaryView.as_view(),
+        name="group_order_summary",
+    ),
+    path(
         "orders/<int:pk>/add-items/",
         orders_views.AddItemsToOrderView.as_view(),
         name="add_items_to_order",
+    ),
+    path(
+        "orders/<int:pk>/remove-items/",
+        orders_views.RemoveItemsFromOrderView.as_view(),
+        name="remove_items_from_order",
+    ),
+    path(
+        "orders/items/<int:item_id>/update-quantity/",
+        orders_views.UpdateItemQuantityView.as_view(),
+        name="update_item_quantity",
     ),
     path("orders/statuses/", orders_views.order_statuses, name="order_statuses"),
 ]

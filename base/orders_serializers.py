@@ -9,6 +9,7 @@ from base.models import (
 )
 from base.enums import GroupOrderStatusEnum
 from base.utils import get_user_from_user_auth, generate_unique_order_code
+from django.db import models
 
 
 class OrderItemCreateSerializer(serializers.Serializer):
@@ -267,7 +268,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         return obj.created_by == user
 
 
-class OrderDetailSerializer(serializers.ModelSerializer):
+class OrderDetailsSerializer(serializers.ModelSerializer):
     """
     Serializer for detailed order information
     """
@@ -301,3 +302,114 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     def get_participants_count(self, obj):
         return obj.participants.count()
+
+
+class OrderItemSummarySerializer(serializers.ModelSerializer):
+    """
+    Serializer for individual order items in summary
+    """
+
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_price = serializers.FloatField(source="product.price", read_only=True)
+
+    class Meta:
+        model = GroupOrderItem
+        fields = ["product_name", "product_price", "quantity", "price"]
+
+
+class UserOrderSummarySerializer(serializers.ModelSerializer):
+    """
+    Serializer for user summary in group order
+    """
+
+    username = serializers.CharField(source="user.username", read_only=True)
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+    items = serializers.SerializerMethodField()
+    total_amount = serializers.FloatField(source="amount", read_only=True)
+    is_paid = serializers.ReadOnlyField()
+
+    class Meta:
+        model = GroupOrderParticipant
+        fields = [
+            "username",
+            "full_name",
+            "items",
+            "total_amount",
+            "paid_amount",
+            "delivery_fees",
+            "vat",
+            "discount",
+            "is_paid",
+            "payment_method",
+        ]
+
+    def get_items(self, obj):
+        """Get all items for this user in the order"""
+        items = GroupOrderItem.objects.filter(
+            group_order=obj.group_order, user=obj.user
+        )
+        return OrderItemSummarySerializer(items, many=True).data
+
+
+class GroupOrderSummarySerializer(serializers.ModelSerializer):
+    """
+    Serializer for group order summary with users and their items
+    """
+
+    created_by = serializers.CharField(source="created_by.username", read_only=True)
+    shop_name = serializers.CharField(source="shop.name", read_only=True)
+    shop_address = serializers.CharField(source="shop.address", read_only=True)
+    participants = serializers.SerializerMethodField()
+    summary_stats = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GroupOrder
+        fields = [
+            "id",
+            "name",
+            "code",
+            "status",
+            "created_by",
+            "shop_name",
+            "shop_address",
+            "total_price",
+            "delivery_fees",
+            "vat",
+            "discount",
+            "created_at",
+            "participants",
+            "summary_stats",
+        ]
+
+    def get_participants(self, obj):
+        """Get all participants with their items"""
+        participants = (
+            GroupOrderParticipant.objects.filter(group_order=obj)
+            .select_related("user")
+            .order_by("user__username")
+        )
+
+        return UserOrderSummarySerializer(
+            participants, many=True, context=self.context
+        ).data
+
+    def get_summary_stats(self, obj):
+        """Get summary statistics for the order"""
+        participants = GroupOrderParticipant.objects.filter(group_order=obj)
+        total_items = GroupOrderItem.objects.filter(group_order=obj).count()
+
+        total_paid = sum(p.paid_amount for p in participants)
+        total_unpaid = sum(p.amount - p.paid_amount for p in participants)
+
+        return {
+            "total_participants": participants.count(),
+            "total_items": total_items,
+            "total_paid": total_paid,
+            "total_unpaid": total_unpaid,
+            "fully_paid_users": participants.filter(
+                paid_amount__gte=models.F("amount")
+            ).count(),
+            "unpaid_users": participants.filter(
+                paid_amount__lt=models.F("amount")
+            ).count(),
+        }
