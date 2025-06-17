@@ -266,9 +266,18 @@ class OrderListSerializer(serializers.ModelSerializer):
     Serializer for listing orders with basic information
     """
 
+    created_by_me = serializers.SerializerMethodField()
+
     class Meta:
         model = GroupOrder
-        fields = ["id", "name", "status", "code"]
+        fields = ["id", "name", "status", "code", "created_by_me"]
+
+    def get_created_by_me(self, obj):
+        """
+        Check if the current user is the creator of the order
+        """
+        user = get_user_from_user_auth(self.context["request"])
+        return obj.created_by == user
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):

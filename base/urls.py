@@ -58,6 +58,11 @@ urlpatterns = [
     path("orders/create/", orders_views.CreateOrderView.as_view(), name="create_order"),
     path("orders/join/", orders_views.JoinOrderView.as_view(), name="join_order"),
     path(
+        "orders/participated/",
+        orders_views.ParticipatedOrdersView.as_view(),
+        name="participated_orders",
+    ),
+    path(
         "orders/<int:pk>/", orders_views.OrderDetailView.as_view(), name="order_detail"
     ),
     path(

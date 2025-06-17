@@ -191,6 +191,51 @@ class OrderListView(generics.ListAPIView):
             )
 
 
+class ParticipatedOrdersView(generics.ListAPIView):
+    """
+    List orders that the authenticated user has participated in (not created)
+    """
+
+    serializer_class = OrderListSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = get_user_from_user_auth(self.request)
+
+        # Get orders where user is a participant but not the creator
+        queryset = GroupOrder.objects.filter(participants__user=user).distinct()
+
+        # Filter by status if provided
+        status_filter = self.request.query_params.get("status", None)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        # Search by order name
+        search = self.request.query_params.get("search", None)
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset.order_by("-created_at")
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(
+                {
+                    "success": True,
+                    "count": queryset.count(),
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class OrderDetailView(generics.RetrieveAPIView):
     """
     Retrieve detailed information about a specific order
