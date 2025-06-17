@@ -28,6 +28,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             "phone_number",
             "instapay_address",
             "accepted_payment_types",
+            "username",  # Use phone_number as username if not provided
         ]
 
     def validate(self, attrs):

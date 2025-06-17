@@ -30,7 +30,9 @@ urlpatterns = [
         name="change_password",
     ),
     # Payment methods endpoint
-    path("auth/payment-methods/", users_views.get_payment_methods, name="payment_methods"),
+    path(
+        "auth/payment-methods/", users_views.get_payment_methods, name="payment_methods"
+    ),
     # Shop endpoints
     path("shops/", shops_views.ShopListView.as_view(), name="shop_list"),
     path("shops/categories/", shops_views.shop_categories, name="shop_categories"),
@@ -48,8 +50,14 @@ urlpatterns = [
     ),
     # Order endpoints
     path("orders/", orders_views.OrderListView.as_view(), name="order_list"),
+    path("orders/create/", orders_views.CreateOrderView.as_view(), name="create_order"),
     path(
         "orders/<int:pk>/", orders_views.OrderDetailView.as_view(), name="order_detail"
+    ),
+    path(
+        "orders/<int:pk>/add-items/",
+        orders_views.AddItemsToOrderView.as_view(),
+        name="add_items_to_order",
     ),
     path("orders/statuses/", orders_views.order_statuses, name="order_statuses"),
 ]

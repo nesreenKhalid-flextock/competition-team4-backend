@@ -3,10 +3,106 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
+
 from base.enums import GroupOrderStatusEnum
-from base.models import GroupOrder, User
-from base.orders_serializers import OrderListSerializer, OrderDetailSerializer
+from base.models import GroupOrder
+from base.orders_serializers import (
+    OrderListSerializer,
+    OrderDetailSerializer,
+    CreateOrderSerializer,
+    AddItemsToOrderSerializer,
+)
 from base.utils import get_user_from_user_auth
+
+
+class CreateOrderView(generics.CreateAPIView):
+    """
+    Create a new group order with items
+    """
+
+    serializer_class = CreateOrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            # Create the order
+            group_order = serializer.save()
+
+            # Return the created order details
+            detail_serializer = OrderDetailSerializer(group_order)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Order created successfully",
+                    "data": detail_serializer.data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class AddItemsToOrderView(generics.CreateAPIView):
+    """
+    Add items to an existing group order
+    """
+
+    serializer_class = AddItemsToOrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_order(self):
+        """Get the order and check if user can add items to it"""
+        order_id = self.kwargs.get("pk")
+        order = get_object_or_404(GroupOrder, pk=order_id)
+        return order
+
+    def create(self, request, *args, **kwargs):
+        try:
+            order = self.get_order()
+
+            serializer = self.get_serializer(
+                data=request.data, context={"order": order, "request": request}
+            )
+            serializer.is_valid(raise_exception=True)
+
+            # Add items to the order
+            result = serializer.save()
+
+            # Return updated order details
+            detail_serializer = OrderDetailSerializer(result["order"])
+
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Added {len(result['new_items'])} items to order",
+                    "data": {
+                        "order": detail_serializer.data,
+                        "items_added": len(result["new_items"]),
+                        "user_total_amount": result["user_total_amount"],
+                    },
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except GroupOrder.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Order not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class OrderListView(generics.ListAPIView):

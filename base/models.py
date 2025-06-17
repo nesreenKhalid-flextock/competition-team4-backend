@@ -2,17 +2,27 @@ from django.db import models
 from django.contrib.auth.models import User as AuthUser
 import json
 
-from base.enums import GroupOrderStatusEnum, ShopCategoryEnum, UserAcceptedPaymentMethodsEnum
+from base.enums import (
+    GroupOrderStatusEnum,
+    ShopCategoryEnum,
+    UserAcceptedPaymentMethodsEnum,
+)
 
 
 class User(models.Model):
-    auth_user = models.OneToOneField(AuthUser, on_delete=models.CASCADE, related_name="custom_user")
+    auth_user = models.OneToOneField(
+        AuthUser, on_delete=models.CASCADE, related_name="custom_user"
+    )
     username = models.CharField(max_length=150, unique=True)
     full_name = models.CharField(max_length=150, blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     instapay_address = models.CharField(max_length=255, blank=True, null=True)
-    profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
-    accepted_payment_types = models.JSONField(default=list, blank=True, help_text="List of accepted payment methods")
+    profile_picture = models.ImageField(
+        upload_to="profile_pictures/", blank=True, null=True
+    )
+    accepted_payment_types = models.JSONField(
+        default=list, blank=True, help_text="List of accepted payment methods"
+    )
 
     def set_accepted_payment_types(self, payment_types):
         """Set accepted payment types from a list of strings"""
@@ -20,7 +30,9 @@ class User(models.Model):
             self.accepted_payment_types = payment_types
         elif isinstance(payment_types, str):
             # Handle comma-separated string input
-            self.accepted_payment_types = [pt.strip() for pt in payment_types.split(",") if pt.strip()]
+            self.accepted_payment_types = [
+                pt.strip() for pt in payment_types.split(",") if pt.strip()
+            ]
         else:
             self.accepted_payment_types = []
 
@@ -29,7 +41,11 @@ class User(models.Model):
         if isinstance(self.accepted_payment_types, list):
             return self.accepted_payment_types
         elif isinstance(self.accepted_payment_types, str):
-            return [pt.strip() for pt in self.accepted_payment_types.split(",") if pt.strip()]
+            return [
+                pt.strip()
+                for pt in self.accepted_payment_types.split(",")
+                if pt.strip()
+            ]
         return []
 
 
@@ -58,7 +74,9 @@ class GroupOrder(models.Model):
     """
 
     name = models.CharField(max_length=255, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_orders")
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="created_orders"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(
@@ -77,6 +95,7 @@ class GroupOrder(models.Model):
         null=True,
         blank=True,
     )
+    code = models.CharField(max_length=6, unique=True, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -102,9 +121,15 @@ class GroupOrderItem(models.Model):
     Represents an item in a group order
     """
 
-    group_order = models.ForeignKey(GroupOrder, on_delete=models.CASCADE, related_name="items")
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="group_order_items", null=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="group_order_items", null=True)
+    group_order = models.ForeignKey(
+        GroupOrder, on_delete=models.CASCADE, related_name="items"
+    )
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="group_order_items", null=True
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="group_order_items", null=True
+    )
     quantity = models.PositiveIntegerField(default=1)
     price = models.FloatField()
 
@@ -117,15 +142,23 @@ class GroupOrderParticipant(models.Model):
     Represents a participant in a group order
     """
 
-    group_order = models.ForeignKey(GroupOrder, on_delete=models.CASCADE, related_name="participants")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="group_orders_participated")
+    group_order = models.ForeignKey(
+        GroupOrder, on_delete=models.CASCADE, related_name="participants"
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="group_orders_participated"
+    )
     amount = models.FloatField(default=0.0)
     paid_amount = models.FloatField(default=0.0)
     delivery_fees = models.FloatField(default=0.0)
     vat = models.FloatField(default=0.0)
     discount = models.FloatField(default=0.0)
-    payment_method = models.CharField(max_length=50, blank=True, null=True)  # e.g., "cash", "card", "instapay"
-    payment_transaction_image = models.ImageField(upload_to="payment_transactions/", blank=True, null=True)
+    payment_method = models.CharField(
+        max_length=50, blank=True, null=True
+    )  # e.g., "cash", "card", "instapay"
+    payment_transaction_image = models.ImageField(
+        upload_to="payment_transactions/", blank=True, null=True
+    )
 
     @property
     def is_paid(self):
@@ -141,8 +174,12 @@ class UserBalance(models.Model):
     Represents a user's balance
     """
 
-    creditor = models.ForeignKey(to=User, on_delete=models.CASCADE, related_name="creditor_balance")
-    debtor = models.ForeignKey(to=User, on_delete=models.CASCADE, related_name="debtor_debt")
+    creditor = models.ForeignKey(
+        to=User, on_delete=models.CASCADE, related_name="creditor_balance"
+    )
+    debtor = models.ForeignKey(
+        to=User, on_delete=models.CASCADE, related_name="debtor_debt"
+    )
     amount = models.FloatField(default=0.0)
 
     def __str__(self):
