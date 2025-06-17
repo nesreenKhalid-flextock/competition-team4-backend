@@ -35,7 +35,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError("Passwords don't match")
 
-        validated_phone_number = self.validate_phone_number(
+        validated_phone_number = self.validate_egyptian_phone_number(
             attrs.get("phone_number", "")
         )
 
@@ -81,22 +81,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         return auth_user
 
-    def validate_phone_number(self, value):
+    def validate_egyptian_phone_number(self, phone_number: str):
         """
-        Validate that the phone number is a valid Egyptian phone number
-        Egyptian phone numbers format:
-        - Mobile: +20 10/11/12/15 XXXXXXXX (11 digits after country code)
-        - Landline: +20 X XXXXXXXX (9-10 digits after country code)
+        Validate Egyptian phone numbers
+        Accepts formats like: 01121444875, +201121444875, 00201121444875
         """
-        if not value:
+        if not phone_number:
             raise serializers.ValidationError("Phone number is required.")
 
         # Remove any spaces, dashes, or parentheses
-        cleaned_phone = re.sub(r"[\s\-\(\)]", "", value)
+        cleaned_phone = re.sub(r"[\s\-\(\)]", "", phone_number)
 
-        # Egyptian phone number patterns
+        # Egyptian mobile number patterns
         patterns = [
-            r"^(\+20|0020|20|0)?(10|11|12|15)\d{8,9}$",  # Mobile numbers
+            r"^(01)[0125]\d{8}$",  # 01X XXXXXXXX (Egyptian local format)
+            r"^(\+20|0020|20)(1)[0125]\d{8}$",  # +20 1X XXXXXXXX (International format)
         ]
 
         # Check if the phone number matches any of the patterns
@@ -104,19 +103,23 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         if not is_valid:
             raise serializers.ValidationError(
-                "Please enter a valid Egyptian phone number. "
-                "Mobile format: +20 1X XXXXXXXX"
+                "Please enter a valid Egyptian mobile number. "
+                "Format: 01X XXXXXXXX (where X is 0, 1, 2, or 5 for the second digit)"
             )
 
-        # Normalize the phone number to international format
+        # Normalize to international format
         if cleaned_phone.startswith("00"):
-            cleaned_phone = "+" + cleaned_phone[2:]
+            normalized_phone = "+" + cleaned_phone[2:]
         elif cleaned_phone.startswith("20"):
-            cleaned_phone = "+" + cleaned_phone
-        elif not cleaned_phone.startswith("+"):
-            cleaned_phone = "+20" + cleaned_phone
+            normalized_phone = "+" + cleaned_phone
+        elif cleaned_phone.startswith("01"):
+            normalized_phone = "+20" + cleaned_phone[1:]
+        elif cleaned_phone.startswith("+20"):
+            normalized_phone = cleaned_phone
+        else:
+            normalized_phone = "+20" + cleaned_phone
 
-        return cleaned_phone
+        return normalized_phone
 
 
 class UserLoginSerializer(serializers.Serializer):

@@ -1,8 +1,10 @@
 import random
 import string
+import re
 
 from django.http import HttpRequest
 from django.contrib.auth.models import User as AuthUser
+from rest_framework import serializers
 
 from base.models import User
 
