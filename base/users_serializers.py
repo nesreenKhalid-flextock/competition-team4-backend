@@ -56,16 +56,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 
 class UserLoginSerializer(serializers.Serializer):
-    username = serializers.CharField(help_text="Username or email address")
+    phone_number = serializers.CharField(help_text="Phone Number")
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        username = attrs.get("username")
+        phone_number = attrs.get("phone_number")
         password = attrs.get("password")
 
-        if username and password:
+        if phone_number and password:
             # Use the custom authentication backend that allows email or username
-            user = authenticate(username=username, password=password)
+            user = authenticate(username=phone_number, password=password)
             if not user:
                 raise serializers.ValidationError("Invalid credentials")
             if not user.is_active:
