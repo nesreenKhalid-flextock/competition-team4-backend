@@ -111,6 +111,12 @@ class AddItemsToOrderView(generics.CreateAPIView):
         try:
             order = self.get_order()
 
+            if order.status != GroupOrderStatusEnum.OPEN.value:
+                return Response(
+                    {"success": False, "error": "Cannot modify closed orders"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             serializer = self.get_serializer(
                 data=request.data, context={"order": order, "request": request}
             )
@@ -163,6 +169,13 @@ class RemoveItemsFromOrderView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         try:
             order = self.get_order()
+
+            if order.status != GroupOrderStatusEnum.OPEN.value:
+                return Response(
+                    {"success": False, "error": "Cannot modify closed orders"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             user = get_user_from_user_auth(request)
 
             # Check if order is still open
@@ -256,6 +269,13 @@ class UpdateItemQuantityView(generics.UpdateAPIView):
         try:
             item = self.get_object()
             order = item.group_order
+
+            if order.status != GroupOrderStatusEnum.OPEN.value:
+                return Response(
+                    {"success": False, "error": "Cannot modify closed orders"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             user = get_user_from_user_auth(request)
 
             # Check if order is still open
@@ -520,7 +540,7 @@ class LockOrderView(generics.UpdateAPIView):
             order = self.get_object()
 
             # Check if order is already locked or closed
-            if order.status == GroupOrderStatusEnum.LOCKED.value:
+            if order.status != GroupOrderStatusEnum.OPEN.value:
                 return Response(
                     {
                         "success": False,
@@ -557,6 +577,192 @@ class LockOrderView(generics.UpdateAPIView):
                 {
                     "success": False,
                     "error": "Order not found or you don't have permission to lock it",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class CancelOrderView(generics.UpdateAPIView):
+    """
+    Cancel a group order - only the creator can cancel the order
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        order_id = self.kwargs.get("pk")
+        user = get_user_from_user_auth(self.request)
+        return get_object_or_404(GroupOrder, pk=order_id, created_by=user)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            order = self.get_object()
+
+            # Check if order can be cancelled
+            if order.status in [
+                GroupOrderStatusEnum.COMPLETED.value,
+                GroupOrderStatusEnum.CANCELLED.value,
+            ]:
+                return Response(
+                    {
+                        "success": False,
+                        "error": f"Cannot cancel an order that is already {order.status.lower()}",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Cancel the order
+            order.status = GroupOrderStatusEnum.CANCELLED.value
+            order.save()
+
+            # Return updated order details
+            detail_serializer = OrderDetailsSerializer(order)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Order has been cancelled successfully",
+                    "data": detail_serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except GroupOrder.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "Order not found or you don't have permission to cancel it",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class MarkOrderedView(generics.UpdateAPIView):
+    """
+    Mark a group order as ordered - only the creator can mark as ordered
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        order_id = self.kwargs.get("pk")
+        user = get_user_from_user_auth(self.request)
+        return get_object_or_404(GroupOrder, pk=order_id, created_by=user)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            order = self.get_object()
+
+            # Check if order can be marked as ordered
+            if order.status != GroupOrderStatusEnum.LOCKED.value:
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Only locked orders can be marked as ordered",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Mark as ordered
+            order.status = GroupOrderStatusEnum.ORDERED.value
+            order.save()
+
+            # Return updated order details
+            detail_serializer = OrderDetailsSerializer(order)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Order has been marked as ordered successfully",
+                    "data": detail_serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except GroupOrder.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "Order not found or you don't have permission to modify it",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class CompleteOrderView(generics.UpdateAPIView):
+    """
+    Complete a group order - only the creator can complete the order
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        order_id = self.kwargs.get("pk")
+        user = get_user_from_user_auth(self.request)
+        return get_object_or_404(GroupOrder, pk=order_id, created_by=user)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            order = self.get_object()
+
+            # Check if order can be completed
+            if order.status not in [
+                GroupOrderStatusEnum.ORDERED.value,
+                GroupOrderStatusEnum.LOCKED.value,
+            ]:
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Only ordered or locked orders can be completed",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if order.status == GroupOrderStatusEnum.COMPLETED.value:
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Order is already completed",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Complete the order
+            order.status = GroupOrderStatusEnum.COMPLETED.value
+            order.save()
+
+            # Return updated order details
+            detail_serializer = OrderDetailsSerializer(order)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Order has been completed successfully",
+                    "data": detail_serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except GroupOrder.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "Order not found or you don't have permission to complete it",
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )

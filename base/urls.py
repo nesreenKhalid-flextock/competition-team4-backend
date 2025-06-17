@@ -90,5 +90,20 @@ urlpatterns = [
         orders_views.LockOrderView.as_view(),
         name="lock_order",
     ),
+    path(
+        "orders/<int:pk>/cancel/",
+        orders_views.CancelOrderView.as_view(),
+        name="cancel_order",
+    ),
+    path(
+        "orders/<int:pk>/mark-ordered/",
+        orders_views.MarkOrderedView.as_view(),
+        name="mark_ordered",
+    ),
+    path(
+        "orders/<int:pk>/complete/",
+        orders_views.CompleteOrderView.as_view(),
+        name="complete_order",
+    ),
     path("orders/statuses/", orders_views.order_statuses, name="order_statuses"),
 ]
