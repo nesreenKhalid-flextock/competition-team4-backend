@@ -187,7 +187,7 @@ class CreateOrderSerializer(serializers.Serializer):
         """Create a new group order with items"""
 
         user = self.context["request"].user.custom_user
-        items_data = validated_data.pop("items")
+        items_data = validated_data.get("items", [])
         shop = Shop.objects.get(id=validated_data["shop_id"])
 
         # Calculate total price
