@@ -81,6 +81,7 @@ class JoinOrderView(generics.CreateAPIView):
                     "data": {
                         "order": detail_serializer.data,
                         "participant_id": result["participant"].id,
+                        "shop_id": result["shop_id"],
                     },
                 },
                 status=status.HTTP_201_CREATED,

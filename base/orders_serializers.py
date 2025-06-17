@@ -72,7 +72,11 @@ class JoinOrderSerializer(serializers.Serializer):
             discount=0.0,
         )
 
-        return {"order": order, "participant": participant}
+        return {
+            "order": order,
+            "participant": participant,
+            "shop_id": order.shop.id if order.shop else None,
+        }
 
 
 class AddItemsToOrderSerializer(serializers.Serializer):
