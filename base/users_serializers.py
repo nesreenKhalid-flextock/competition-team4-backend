@@ -5,6 +5,7 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from base.models import User
 
+ACCEPTED_PAYMENT_TYPES_HELP_TEXT = "List of accepted payment methods"
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
@@ -16,7 +17,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         child=serializers.CharField(max_length=50),
         required=False,
         allow_empty=True,
-        help_text="List of accepted payment methods",
+        help_text=ACCEPTED_PAYMENT_TYPES_HELP_TEXT,
     )
 
     class Meta:
@@ -45,31 +46,29 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             )
 
         attrs["phone_number"] = validated_phone_number
-
+        attrs["username"] = validated_phone_number  # <-- Always set username to normalized phone
         return attrs
 
     def create(self, validated_data):
-        # Remove password_confirm and custom fields from validated_data for AuthUser
-        password_confirm = validated_data.pop("password_confirm")
+        password = validated_data.pop("password")
+        validated_data.pop("password_confirm", None)
         full_name = validated_data.pop("full_name", "")
         phone_number = validated_data.pop("phone_number", "")
         instapay_address = validated_data.pop("instapay_address", "")
         accepted_payment_types = validated_data.pop("accepted_payment_types", [])
-        username = validated_data.pop("username", phone_number)
+        username = validated_data.pop("username")  # This is now always the normalized phone
 
-        fullname_split = validated_data.pop("fullname", "").strip().split(maxsplit=1)
+        fullname_split = full_name.strip().split(maxsplit=1)
         first_name = fullname_split[0] if fullname_split else ""
         last_name = fullname_split[1] if len(fullname_split) > 1 else ""
 
-        # Create AuthUser
         auth_user = AuthUser.objects.create_user(
             username=username,
-            password=password_confirm,
+            password=password,
             first_name=first_name,
             last_name=last_name,
         )
 
-        # Create custom User
         User.objects.create(
             auth_user=auth_user,
             username=username,
@@ -117,10 +116,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         elif cleaned_phone.startswith("+20"):
             normalized_phone = cleaned_phone
         else:
-            normalized_phone = "+20" + cleaned_phone
-
+            raise serializers.ValidationError(
+                "Please enter a valid Egyptian mobile number. "
+                "Format: 01X XXXXXXXX (where X is 0, 1, 2, or 5 for the second digit)"
+            )
         return normalized_phone
-
 
 class UserLoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField(help_text="Phone Number")
@@ -131,22 +131,24 @@ class UserLoginSerializer(serializers.Serializer):
         password = attrs.get("password")
 
         if phone_number and password:
-            # Use the custom authentication backend that allows email or username
-            user = authenticate(username=phone_number, password=password)
+            normalized_phone = UserRegistrationSerializer().validate_egyptian_phone_number(phone_number)
+            # Ensure username is the normalized phone number as used in registration
+            user = authenticate(username=normalized_phone, password=password)
             if not user:
-                raise serializers.ValidationError("Invalid credentials")
+                # Try fallback: check if user exists with normalized_phone as username
+                if AuthUser.objects.filter(username=normalized_phone).exists():
+                    raise serializers.ValidationError({"non_field_errors": ["Invalid credentials"]})
+                else:
+                    raise serializers.ValidationError({"non_field_errors": ["User does not exist"]})
             if not user.is_active:
                 raise serializers.ValidationError("User account is disabled")
             attrs["user"] = user
+            return attrs
         else:
-            raise serializers.ValidationError(
-                "Must include username/email and password"
-            )
-
-        return attrs
-
+            raise serializers.ValidationError("Must include 'phone_number' and 'password'.")
 
 class UserSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="auth_user.username", read_only=True)
     username = serializers.CharField(source="auth_user.username", read_only=True)
     email = serializers.CharField(source="auth_user.email", read_only=True)
     first_name = serializers.CharField(source="auth_user.first_name", read_only=True)
@@ -154,7 +156,7 @@ class UserSerializer(serializers.ModelSerializer):
     accepted_payment_types = serializers.ListField(
         child=serializers.CharField(max_length=50),
         read_only=True,
-        help_text="List of accepted payment methods",
+        help_text=ACCEPTED_PAYMENT_TYPES_HELP_TEXT,
     )
 
     class Meta:
@@ -168,11 +170,8 @@ class UserSerializer(serializers.ModelSerializer):
             "full_name",
             "phone_number",
             "instapay_address",
-            "profile_picture",
             "accepted_payment_types",
         ]
-
-
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, min_length=8)
@@ -180,15 +179,8 @@ class ChangePasswordSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if attrs["new_password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError("New passwords don't match")
+            raise serializers.ValidationError("New password and confirm password do not match.")
         return attrs
-
-    def validate_old_password(self, value):
-        user = self.context["request"].user
-        if not user.check_password(value):
-            raise serializers.ValidationError("Old password is incorrect")
-        return value
-
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source="auth_user.first_name")
@@ -198,7 +190,7 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         child=serializers.CharField(max_length=50),
         required=False,
         allow_empty=True,
-        help_text="List of accepted payment methods",
+        help_text=ACCEPTED_PAYMENT_TYPES_HELP_TEXT,
     )
 
     class Meta:
