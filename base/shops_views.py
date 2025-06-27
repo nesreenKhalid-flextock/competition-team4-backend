@@ -8,7 +8,7 @@ from django.db.models import Q
 from base.models import Shop, Product
 from base.shops_serializer import ShopSerializer, ShopDetailSerializer, ProductSerializer
 
-
+# List all shops with optional filtering by category and search
 class ShopListView(generics.ListAPIView):
     """
     List all shops with optional filtering by category and search
@@ -18,6 +18,7 @@ class ShopListView(generics.ListAPIView):
     serializer_class = ShopSerializer
     permission_classes = [IsAuthenticated]
 
+    # Get filtered queryset for shops
     def get_queryset(self):
         queryset = Shop.objects.all()
 
@@ -33,6 +34,7 @@ class ShopListView(generics.ListAPIView):
 
         return queryset.order_by("name")
 
+    # Return list of shops with success/error response
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.get_queryset()
@@ -42,6 +44,7 @@ class ShopListView(generics.ListAPIView):
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# Retrieve a shop with its products
 class ShopDetailView(generics.RetrieveAPIView):
     """
     Retrieve a shop with its products
@@ -51,6 +54,7 @@ class ShopDetailView(generics.RetrieveAPIView):
     serializer_class = ShopDetailSerializer
     permission_classes = [IsAuthenticated]
 
+    # Retrieve a single shop by pk with error handling
     def retrieve(self, request, *args, **kwargs):
         try:
             # Explicitly handle the pk lookup to check if shop exists
@@ -64,6 +68,7 @@ class ShopDetailView(generics.RetrieveAPIView):
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# List all products for a shop or create a new product
 class ProductListView(generics.ListCreateAPIView):
     """
     List all products for a shop or create a new product
@@ -72,6 +77,7 @@ class ProductListView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
 
+    # Get filtered queryset for products of a shop
     def get_queryset(self):
         shop_id = self.kwargs.get("shop_id")
         queryset = Product.objects.filter(shop_id=shop_id)
@@ -88,6 +94,7 @@ class ProductListView(generics.ListCreateAPIView):
 
         return queryset.order_by("name")
 
+    # Return list of products for a shop with success/error response
     def list(self, request, *args, **kwargs):
         try:
             shop_id = self.kwargs.get("shop_id")
@@ -102,11 +109,13 @@ class ProductListView(generics.ListCreateAPIView):
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # Save a new product for a shop
     def perform_create(self, serializer):
         shop_id = self.kwargs.get("shop_id")
         shop = get_object_or_404(Shop, pk=shop_id)
         serializer.save(shop=shop)
 
+    # Create a new product for a shop with error handling
     def create(self, request, *args, **kwargs):
         try:
             shop_id = self.kwargs.get("shop_id")
@@ -124,6 +133,7 @@ class ProductListView(generics.ListCreateAPIView):
             return Response({"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+# Retrieve, update or delete a product
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Retrieve, update or delete a product
@@ -133,6 +143,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
 
+    # Retrieve a single product by pk with error handling
     def retrieve(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
@@ -143,6 +154,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # Update a product with error handling
     def update(self, request, *args, **kwargs):
         try:
             partial = kwargs.pop("partial", False)
@@ -157,6 +169,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Delete a product with error handling
     def destroy(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
@@ -169,6 +182,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# Get all distinct product categories currently in use
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def product_categories(request):
@@ -185,9 +199,19 @@ def product_categories(request):
         return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# Get all available shop categories
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def shop_categories(request):
+    """
+    Get all available shop categories
+    """
+    try:
+
+        categories = [{"value": choice[0], "label": choice[1]} for choice in ShopCategoryEnum.choices]
+        return Response({"success": True, "data": categories}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     """
     Get all available shop categories
     """
@@ -198,3 +222,25 @@ def shop_categories(request):
         return Response({"success": True, "data": categories}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_shop_by_name(request):
+    """
+    Create a shop with only a name (other fields blank/default)
+    """
+    name = request.data.get("name")
+    if not name:
+        return Response({"success": False, "error": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    from base.models import Shop
+    shop = Shop.objects.create(
+        name=name,
+        description="",
+        category="SUPERMARKET",  # or any default valid category
+        address="",
+    )
+    from base.shops_serializer import ShopSerializer
+    serializer = ShopSerializer(shop)
+    return Response({"success": True, "data": serializer.data}, status=status.HTTP_201_CREATED)

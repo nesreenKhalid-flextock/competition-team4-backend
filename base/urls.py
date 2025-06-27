@@ -37,6 +37,7 @@ urlpatterns = [
     path("shops/", shops_views.ShopListView.as_view(), name="shop_list"),
     path("shops/categories/", shops_views.shop_categories, name="shop_categories"),
     path("shops/<int:pk>/", shops_views.ShopDetailView.as_view(), name="shop_detail"),
+    path("shops/create-by-name/", shops_views.create_shop_by_name, name="create_shop_by_name"),
     # Product endpoints
     path(
         "products/categories/",
