@@ -312,13 +312,13 @@ class OrderItemSummarySerializer(serializers.ModelSerializer):
     """
     Serializer for individual order items in summary
     """
-
+    product_id = serializers.IntegerField(source="product.id", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_price = serializers.FloatField(source="product.price", read_only=True)
 
     class Meta:
         model = GroupOrderItem
-        fields = ["product_name", "product_price", "quantity", "price"]
+        fields = ["product_id" ,"product_name", "product_price", "quantity", "price"]
 
 
 class UserOrderSummarySerializer(serializers.ModelSerializer):
